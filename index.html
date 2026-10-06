@@ -398,10 +398,11 @@ document.addEventListener('DOMContentLoaded', async function() {
   .wu-zoom .wu-pct{min-width:50px;height:34px;border-radius:8px;border:1.5px solid #E3E5E8;background:#FFFFFF;color:#1C1C3A;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;}
 </style>
 <script id="wu-enh-script">
-/* Outside the packed bundle on purpose. This never edits the bundle data, so it cannot cause the
-   blank page. It waits for the app to finish rebuilding (by polling, which works whether the
-   bundler keeps the body or replaces the whole document) then adds the map zoom and repoints the
-   two dead footer links. If the app never renders, this simply does nothing. */
+/* Lives outside the packed bundle, so it never affects whether the page renders. Waits for the app
+   to rebuild (polling, works whether the bundler keeps or replaces the DOM) then adds the map zoom
+   and fixes the footer. The footer's real markup was the catch: the current-page link is
+   href=".../westeros/" with aria-current, and the dead links are /interstellar/ and /PROJECT-3/,
+   so target those exactly. */
 (function(){
   var scale=1, MIN=0.4, MAX=1.0, STEP=0.1;
   function svgEl(){ return document.querySelector('svg[viewBox="0 0 1120 1300"]'); }
@@ -429,12 +430,16 @@ document.addEventListener('DOMContentLoaded', async function() {
     applyZoom(); return true;
   }
   function ensureFooter(){
-    var cur=document.querySelector('a[aria-current="page"][href*="westeros-underground-map"]');
-    var nav=cur ? cur.parentElement : null; if(!nav) return false;
-    var dead=nav.querySelector('a[href$="/interstellar/"]');
-    if(dead){ dead.setAttribute('href','https://saleemyousaf.co.uk/millers-planet/'); dead.textContent="Miller's Planet"; }
+    var nav=document.querySelector('footer nav'); if(!nav) return false;
+    // current-page self link points at the old /westeros/ slug, which 404s; repoint to the real URL
+    var self=nav.querySelector('a[aria-current="page"]');
+    if(self) self.setAttribute('href','https://saleemyousaf.co.uk/westeros-underground-map/');
+    // dead links
+    var il=nav.querySelector('a[href$="/interstellar/"]');
+    if(il){ il.setAttribute('href','https://saleemyousaf.co.uk/millers-planet/'); il.textContent="Miller's Planet"; }
     var p3=nav.querySelector('a[href$="/PROJECT-3/"]');
     if(p3){ p3.setAttribute('href','https://saleemyousaf.co.uk/scene-atlas/'); p3.textContent='Scene Atlas'; }
+    // network links, inserted once after Home
     if(!nav.querySelector('[data-wu-net]')){
       var home=nav.querySelector('a'); if(!home) return true;
       var ref=home;
