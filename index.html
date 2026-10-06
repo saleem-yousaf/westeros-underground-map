@@ -398,14 +398,10 @@ document.addEventListener('DOMContentLoaded', async function() {
   .wu-zoom .wu-pct{min-width:50px;height:34px;border-radius:8px;border:1.5px solid #E3E5E8;background:#FFFFFF;color:#1C1C3A;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;}
 </style>
 <script id="wu-enh-script">
-/* Westeros page enhancements, kept entirely outside the packed app blob so the unpacker is never
-   touched (editing the blob is what blanked the page before). Two jobs, both run after the app
-   renders and re-run on any re-render via an observer on documentElement:
-   1) Map zoom: the map is an <svg viewBox="0 0 1120 1300"> at width:100%, so it could not be shrunk.
-      The control sets the svg width (40% to 100%); height is auto so the panel shrinks with it.
-   2) Footer links: the packed footer links to /interstellar/ and /PROJECT-3/, which both 404.
-      Repoint them to /millers-planet/ and /scene-atlas/, and add the network links. Done in the
-      live DOM, so the blob stays intact. */
+/* Outside the packed bundle on purpose. This never edits the bundle data, so it cannot cause the
+   blank page. It waits for the app to finish rebuilding (by polling, which works whether the
+   bundler keeps the body or replaces the whole document) then adds the map zoom and repoints the
+   two dead footer links. If the app never renders, this simply does nothing. */
 (function(){
   var scale=1, MIN=0.4, MAX=1.0, STEP=0.1;
   function svgEl(){ return document.querySelector('svg[viewBox="0 0 1120 1300"]'); }
@@ -413,13 +409,12 @@ document.addEventListener('DOMContentLoaded', async function() {
   function applyZoom(){
     var svg=svgEl();
     if(svg){ svg.style.width=Math.round(scale*100)+'%'; svg.style.height='auto'; svg.style.display='block'; svg.style.margin='0 auto'; }
-    var pct=document.querySelector('.wu-zoom .wu-pct');
-    if(pct) pct.textContent=Math.round(scale*100)+'%';
+    var pct=document.querySelector('.wu-zoom .wu-pct'); if(pct) pct.textContent=Math.round(scale*100)+'%';
   }
   function setScale(v){ scale=Math.max(MIN,Math.min(MAX,Math.round(v*10)/10)); applyZoom(); }
   function ensureZoom(){
-    var svg=svgEl(); if(!svg) return;
-    var box=svg.parentElement; if(!box) return;
+    var svg=svgEl(); if(!svg) return false;
+    var box=svg.parentElement; if(!box) return false;
     if(getComputedStyle(box).position==='static') box.style.position='relative';
     if(!box.querySelector('.wu-zoom')){
       var ctrl=document.createElement('div'); ctrl.className='wu-zoom';
@@ -431,33 +426,32 @@ document.addEventListener('DOMContentLoaded', async function() {
       ctrl.appendChild(minus); ctrl.appendChild(pct); ctrl.appendChild(plus);
       box.appendChild(ctrl);
     }
-    applyZoom();
+    applyZoom(); return true;
   }
   function ensureFooter(){
     var cur=document.querySelector('a[aria-current="page"][href*="westeros-underground-map"]');
-    var nav=cur ? cur.parentElement : null;
-    if(!nav) return;
+    var nav=cur ? cur.parentElement : null; if(!nav) return false;
     var dead=nav.querySelector('a[href$="/interstellar/"]');
     if(dead){ dead.setAttribute('href','https://saleemyousaf.co.uk/millers-planet/'); dead.textContent="Miller's Planet"; }
     var p3=nav.querySelector('a[href$="/PROJECT-3/"]');
     if(p3){ p3.setAttribute('href','https://saleemyousaf.co.uk/scene-atlas/'); p3.textContent='Scene Atlas'; }
     if(!nav.querySelector('[data-wu-net]')){
-      var home=nav.querySelector('a'); if(!home) return;
+      var home=nav.querySelector('a'); if(!home) return true;
       var ref=home;
       [['Security articles','https://saleemyousaf.co.uk/articles/'],
        ['Cyber Spartans','https://cyberspartans.co.uk'],
        ['BreachForge','https://breachforge.co.uk']].forEach(function(pair){
-        var a=home.cloneNode(true);
-        a.removeAttribute('aria-current');
+        var a=home.cloneNode(true); a.removeAttribute('aria-current');
         a.setAttribute('href', pair[1]); a.textContent=pair[0]; a.setAttribute('data-wu-net','1');
         ref.parentNode.insertBefore(a, ref.nextSibling); ref=a;
       });
     }
+    return true;
   }
-  function ensure(){ ensureZoom(); ensureFooter(); }
-  var mo=new MutationObserver(function(){ ensure(); });
-  function start(){ ensure(); mo.observe(document.documentElement,{childList:true,subtree:true}); }
-  if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', start); } else { start(); }
+  function ensure(){ var z=ensureZoom(); var f=ensureFooter(); return z && f; }
+  var tries=0, iv=setInterval(function(){ tries++; if(ensure() || tries>60) clearInterval(iv); }, 500);
+  try{ var mo=new MutationObserver(function(){ ensure(); });
+       mo.observe(document.documentElement,{childList:true,subtree:true}); }catch(e){}
 })();
 </script>
 
